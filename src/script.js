@@ -50,16 +50,13 @@ function applyVideoTexture(meshMaterial, isBackground) {
 
 const clock = new THREE.Clock();
 const stats = new Stats();
-const sizes = {
-    width: 2000,
-    height: 2000
-}
 
 let camera = null
 let controls = null
 const renderer = new THREE.WebGLRenderer({
     canvas: canvas, antialias: true
 })
+renderer.setSize(1440, 810);
 
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -92,16 +89,15 @@ loader.load('output.glb', function (gltf) {
     const model = gltf.scene;
 
     // Setup camera
+        const importedCamera = gltf.cameras[0];
+        camera = new THREE.PerspectiveCamera(
+            importedCamera.fov,
+            1440/810,
+            importedCamera.near,
+            importedCamera.far
+        );
     {
         if (gltf.cameras.length > 0) {
-            const importedCamera = gltf.cameras[0];
-            camera = new THREE.PerspectiveCamera(
-                importedCamera.fov,
-                window.innerWidth / window.innerHeight,
-                importedCamera.near,
-                importedCamera.far
-            );
-
             camera.position.copy(importedCamera.position);
             camera.rotation.copy(importedCamera.rotation);
             if (gltf.cameras[0].userData && gltf.cameras[0].userData.extras) {
@@ -111,20 +107,15 @@ loader.load('output.glb', function (gltf) {
                     gltf.cameras[0].userData.extras.random_delta_transform[2]
                 );
                 camera.position.add(deltaTransform);
+                camera.position.z -= 5;
             }
-        } else {
-            // TODO: Crash
         }
-
+        scene.add(camera);
+    }
         controls = new OrbitControls(camera, container);
         controls.enablePan = false;
         controls.enableZoom = true;
         controls.update();
-
-        camera.quaternion.copy(gltf.cameras[0].quaternion);
-        camera.scale.copy(gltf.cameras[0].scale);
-        scene.add(camera);
-    }
 
     mixer = new THREE.AnimationMixer(model);
     let i = 0;
