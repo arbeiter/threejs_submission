@@ -1,10 +1,5 @@
 # Three.js Journey
 
-### Branch details
-
-- This branch has a blender file with the blender script
-that exports the camera
-
 ## Setup
 Download [Node.js](https://nodejs.org/en/download/).
 Run this followed commands:

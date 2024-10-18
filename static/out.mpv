@@ -1,0 +1,61 @@
+[lavf] This format is marked by FFmpeg as having no timestamps!
+[lavf] FFmpeg will likely make up its own broken timestamps. For
+[lavf] video streams you can correct this with:
+[lavf]     --no-correct-pts --container-fps-override=VALUE
+[lavf] with VALUE being the real framerate of the stream. You can
+[lavf] expect seeking and buffering estimation to be generally
+[lavf] broken as well.
+● Video  --vid=1  (mpeg2video 1920x1080 25 fps)
+Container FPS forced to 60.000.
+Use --no-correct-pts to force FPS based timing.
+VO: [gpu] 1920x1080 yuv420p
+V: 00:00:00 / 00:00:01 (0%)
+V: 00:00:00 / 00:00:01 (2%)
+V: 00:00:00 / 00:00:01 (3%)
+V: 00:00:00 / 00:00:01 (4%)
+V: 00:00:00 / 00:00:01 (6%)
+V: 00:00:00 / 00:00:01 (7%)
+V: 00:00:00 / 00:00:01 (8%)
+V: 00:00:00 / 00:00:01 (9%)
+V: 00:00:00 / 00:00:01 (10%)
+V: 00:00:00 / 00:00:01 (11%)
+V: 00:00:00 / 00:00:01 (12%)
+V: 00:00:00 / 00:00:01 (13%)
+V: 00:00:00 / 00:00:01 (14%)
+V: 00:00:00 / 00:00:01 (15%)
+V: 00:00:00 / 00:00:01 (16%) Dropped: 1
+V: 00:00:00 / 00:00:01 (17%) Dropped: 1
+V: 00:00:00 / 00:00:01 (18%) Dropped: 1
+V: 00:00:00 / 00:00:01 (19%) Dropped: 1
+V: 00:00:00 / 00:00:01 (20%) Dropped: 2
+V: 00:00:00 / 00:00:01 (21%) Dropped: 2
+V: 00:00:00 / 00:00:01 (22%) Dropped: 2
+V: 00:00:00 / 00:00:01 (23%) Dropped: 2
+V: 00:00:00 / 00:00:01 (24%) Dropped: 2
+V: 00:00:00 / 00:00:01 (25%) Dropped: 2
+V: 00:00:00 / 00:00:01 (26%) Dropped: 3
+V: 00:00:00 / 00:00:01 (27%) Dropped: 3
+V: 00:00:00 / 00:00:01 (28%) Dropped: 3
+V: 00:00:00 / 00:00:01 (29%) Dropped: 3
+V: 00:00:00 / 00:00:01 (30%) Dropped: 3
+V: 00:00:00 / 00:00:01 (31%) Dropped: 3
+V: 00:00:00 / 00:00:01 (32%) Dropped: 4
+V: 00:00:00 / 00:00:01 (33%) Dropped: 4
+V: 00:00:00 / 00:00:01 (34%) Dropped: 4
+V: 00:00:00 / 00:00:01 (35%) Dropped: 4
+V: 00:00:00 / 00:00:01 (36%) Dropped: 4
+V: 00:00:00 / 00:00:01 (37%) Dropped: 4
+V: 00:00:00 / 00:00:01 (37%) Dropped: 5
+V: 00:00:00 / 00:00:01 (38%) Dropped: 5
+V: 00:00:00 / 00:00:01 (39%) Dropped: 5
+V: 00:00:00 / 00:00:01 (40%) Dropped: 5
+V: 00:00:00 / 00:00:01 (41%) Dropped: 5
+V: 00:00:00 / 00:00:01 (42%) Dropped: 5
+V: 00:00:00 / 00:00:01 (43%) Dropped: 6
+V: 00:00:00 / 00:00:01 (44%) Dropped: 6
+V: 00:00:00 / 00:00:01 (45%) Dropped: 6
+V: 00:00:00 / 00:00:01 (46%) Dropped: 6
+V: 00:00:00 / 00:00:01 (47%) Dropped: 6
+V: 00:00:00 / 00:00:01 (48%) Dropped: 6
+V: 00:00:00 / 00:00:01 (49%) Dropped: 7
+Exiting... (End of file)

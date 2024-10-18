@@ -1,277 +1,497 @@
 import * as THREE from 'three'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import Stats from 'three/addons/libs/stats.module.js';
-
-let backgroundVideoGlobal; // Define a reference to the background video element globally
 // Canvas
 const canvas = document.querySelector('canvas.webgl')
 // Scene
 const scene = new THREE.Scene()
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'; // Import the GLTFLoader
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-import { cameraPosition } from 'three/webgpu';
-let videoGlobal; // Define a reference to the video element globally
-// Variables for mouse position
+import { GUI } from 'lil-gui';
+import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
+
+const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-const vector = new THREE.Vector3(); // To hold the projected position in 3D space
+const selectableObjects = [];
+let bbox =  null; 
+let bboxHelper = null;
 
+// Create a play button
+const playButton = document.createElement('button');
+playButton.innerHTML = "Play Video";
+document.body.appendChild(playButton);
 
-function computeMeshCenter(mesh) {
-    const boundingBox = new THREE.Box3().setFromObject(mesh);
-    const center = new THREE.Vector3();
-    boundingBox.getCenter(center);
-    return center;
-}
-function setupCamera(gltf, boundingBox) {
-
-    if (gltf.cameras && gltf.cameras.length > 0) {
-        const importedCamera = gltf.cameras[0];
-
-        // Create a new PerspectiveCamera using imported properties
-        camera = new THREE.PerspectiveCamera(
-            importedCamera.fov, // Convert FOV from radians to degrees
-            1920/1080,
-            importedCamera.near,
-            importedCamera.far 
-        );
-        const size = boundingBox.getSize(new THREE.Vector3()).length();
-        camera.near = size / 100;
-        camera.far = size * 100;
-        camera.updateProjectionMatrix();
-        importCameraSettingsFromGltf(importedCamera);
-        const cameraHelper = new THREE.CameraHelper(camera);
-        scene.add(cameraHelper);
-    }
-
-    function importCameraSettingsFromGltf(importedCamera) {
-        if (importedCamera.position && importedCamera.position instanceof THREE.Vector3) {
-            camera.position.copy(importedCamera.position);
-        }
-        cameraScale = importedCamera.scale;
-        camera.scale.copy(importedCamera.scale);
-        const cameraEuler = new THREE.Euler(
-            importedCamera.userData.euler_rotation[0], // X-axis rotation (in radians)
-            0, // Y-axis rotation (in radians)
-            importedCamera.userData.euler_rotation[2], // Z-axis rotation (in radians)
-            'XYZ' // Use 'XYZ' as the rotation order
-        );
-        camera.rotation.copy(cameraEuler);
-        let cameraDirection = new THREE.Vector3();
-        camera.getWorldDirection(cameraDirection);
-        console.log("CAMERA DIR", cameraDirection);
-        camera.updateProjectionMatrix();
-    }
+function updateCamera() {
 }
 
-let added = false;
-function createCameraFromBoundingBox(planeCenter, boundingBox, fov) {
-    const maxDim = Math.max(boundingBox.max.x, boundingBox.max.y, boundingBox.max.z);
-    const fovDegree = THREE.MathUtils.degToRad(fov); // Convert FOV to radians
-    const cameraDistance = (maxDim / 2) / Math.atan(fovDegree / 2); // Distance based on FOV and object size
-
-    const bbox_center = new THREE.Vector3();
-    boundingBox.getCenter(bbox_center);
-    camera.lookAt(planeCenter);
- 
-    const size = boundingBox.getSize(new THREE.Vector3()).length();
-    camera.near = size / 100;
-    camera.far = size * 100;
-    camera.updateProjectionMatrix();
-    
-    const direction = new THREE.Vector3();
-    camera.getWorldDirection(direction);
-}
-
-function getCenterPoint(mesh) {
-    var geometry = mesh.geometry;
-    geometry.computeBoundingBox();
-    var center = new THREE.Vector3();
-    geometry.boundingBox.getCenter( center );
-    return center;
-}
-
-function applyVideoTexture(meshMaterial, isBackground) {
-    // video_texture_name
-    // Access custom properties from mesh.userData.extras
-    const extras = meshMaterial.userData.video_texture_paths;
-    const videoPath = extras;
-
-    // Create a video element
-    const video = document.createElement('video');
-    video.src = videoPath; // Set the source to the video path
-    video.crossOrigin = 'anonymous';
-    video.loop = true;
-    video.muted = true; // Mute to allow autoplay without user interaction
-    // Create a VideoTexture from the video element
-    const videoTexture = new THREE.VideoTexture(video);
-    videoTexture.minFilter = THREE.LinearFilter;
-    videoTexture.magFilter = THREE.LinearFilter;
-    videoTexture.format = THREE.RGBAFormat;
-    // Clone the mesh's material to avoid affecting other meshes
-    const material = meshMaterial.clone();
-    material.transparent = true; // Enable transparency
-    material.side = THREE.DoubleSide;
-    if(isBackground) {
-        backgroundVideoGlobal =  video;
-    }
-
-    // Assign the VideoTexture to the material's map
-    material.map = videoTexture;
-    console.log(`Applied video texture "${videoPath}" to mesh "${meshMaterial.name}".`);
-    videoGlobal = video;
-    return material;
-}
-
+/**
+ * Object
+ */
 const clock = new THREE.Clock();
 const stats = new Stats();
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+/**
+ * Sizes
+ */
 const sizes = {
-    width: 2000,
-    height: 2000
+    width: 1000,
+    height:1000 
 }
 
-let camera = null
-let controls = null
+/**
+ * Camera
+ */
+const camera = new THREE.PerspectiveCamera(75, sizes.width / sizes.height)
+camera.position.z = -10;
+scene.add(camera)
+let isDragging = false;
+let selectedObject = null;
+let dragPlane = new THREE.Plane();
+const offset = new THREE.Vector3();
+
 const renderer = new THREE.WebGLRenderer({
-    canvas: canvas, antialias: true 
+    canvas: canvas, antialias: true
 })
-renderer.setSize(1440, 810);
-
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-const container = document.getElementById('container');
-container.appendChild(renderer.domElement);
+// Event Listeners for Mouse Interaction
+renderer.domElement.addEventListener('mousedown', onMouseDown, false);
+renderer.domElement.addEventListener('mousemove', onMouseMove, false);
+renderer.domElement.addEventListener('mouseup', onMouseUp, false);
+renderer.setSize(sizes.width, sizes.height);
+document.addEventListener('keydown', onKeyDown, false);
 
-let angle = 0.0;
+function onMouseDown(event) {
+    // Calculate mouse position in normalized device coordinates
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = - ((event.clientY - rect.top) / rect.height) * 2 + 1;
+    // Update the raycaster
+    raycaster.setFromCamera(mouse, camera);
+    
+    // Perform raycasting
+    const intersects = raycaster.intersectObjects(selectableObjects, true);
+    if (intersects.length > 0) {
+        // Prevent the controls from rotating the scene
+        selectedObject = modelGroup; 
+        // Highlight the bounding box
+        highlightBoundingBox(selectedObject);
+        // Set up the plane for movement calculation
+        dragPlane.setFromNormalAndCoplanarPoint(
+            camera.getWorldDirection(new THREE.Vector3()),
+            selectedObject.position
+        );
+        // Calculate the offset between the intersection point and the object position
+        const intersectionPoint = intersects[0].point;
+        offset.copy(intersectionPoint).sub(selectedObject.position);
+        isDragging = true;
+    } else {
+        // If no object is selected, allow controls to operate
+        controls.enabled = true;
+    }
+}
+
+function onMouseMove(event) {
+    if (!isDragging) return;
+    // Calculate mouse position in normalized device coordinates
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = - ((event.clientY - rect.top) / rect.height) * 2 + 1;
+    // Update the raycaster
+    raycaster.setFromCamera(mouse, camera);
+    // Calculate the intersection point with the plane
+    const planeIntersect = new THREE.Vector3();
+    raycaster.ray.intersectPlane(dragPlane, planeIntersect);
+    // Update the object's position
+    selectedObject.position.copy(planeIntersect.sub(offset));
+    // Update the bounding box helper
+    if (bboxHelper) {
+        bboxHelper.update();
+    }
+}
+
+function onMouseUp(event) {
+    if (isDragging) {
+        isDragging = false;
+        controls.enabled = true;
+    }
+}
+
+function highlightBoundingBox(object) {
+    // Remove existing bounding box helper
+    if (bboxHelper) {
+        scene.remove(bboxHelper);
+        bboxHelper = null;
+    }
+    // Create a new bounding box helper for the selected object
+    bboxHelper = new THREE.BoxHelper(object, 0xffff00); // Yellow color
+    scene.add(bboxHelper);
+}
+
+const container = document.getElementById( 'container' );
+container.appendChild( stats.dom );
+container.appendChild( renderer.domElement );
+
+const controls = new OrbitControls( camera, container );
+controls.enablePan = false;
+controls.enableZoom = true;
+controls.update();
+
+const planeWidth = 5; // Fixed width
+const planeHeight = 5; // Choose an appropriate height for the plane
+const planeGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
+
 function animate() {
     const delta = clock.getDelta();
-    mixer.update(delta);
-    // controls.update(delta);
-    console.log('Camera Parameters:', {
-        position: camera.position,
-        rotation: camera.rotation,
-        quaternion: camera.quaternion,
-        scale: camera.scale,
-        fov: camera.fov,
-        aspect: camera.aspect,
-        near: camera.near,
-        far: camera.far
-    });
-    renderer.render(scene, camera);
+    mixer.update( delta );
+    controls.update();
+    stats.update();
+    renderer.render( scene, camera );
 }
 
-scene.background = new THREE.Color('grey');
+scene.background = new THREE.Color( 'grey');
 
 let mixer;
 const loader = new GLTFLoader();
 const dracoLoader = new DRACOLoader();
 let decoderPath = 'https://www.gstatic.com/draco/v1/decoders/';
-dracoLoader.setDecoderPath(decoderPath);
+dracoLoader.setDecoderPath( decoderPath );
 
-loader.setDRACOLoader(dracoLoader);
+loader.setDRACOLoader( dracoLoader);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer shadows
 renderer.setPixelRatio(window.devicePixelRatio);
 
-loader.load('output.glb', function (gltf) {
+
+const color = 0xFFFFFF;
+const intensity = 100;
+const light = new THREE.PointLight( color, intensity );
+// Shadow map size
+light.shadow.mapSize.width = 2048;
+light.shadow.mapSize.height = 2048;
+
+// Shadow camera settings
+light.shadow.camera.left = -50;
+light.shadow.camera.right = 50;
+light.shadow.camera.top = 50;
+light.shadow.camera.bottom = -50;
+light.shadow.camera.near = 1;
+light.shadow.camera.far = 100;
+
+
+light.castShadow = true;
+light.position.set( 0, 10, 0 );
+scene.add( light );
+const helper = new THREE.PointLightHelper( light );
+scene.add( helper );
+scene.add( helper );
+class ColorGUIHelper {
+    constructor( object, prop ) {
+        this.object = object;
+        this.prop = prop;
+    }
+    get value() {
+        return `#${this.object[ this.prop ].getHexString()}`;
+    }
+    set value( hexString ) {
+        this.object[ this.prop ].set( hexString );
+    }
+}
+
+function makeXYZGUI( gui, vector3, name, onChangeFn ) {
+    const folder = gui.addFolder( name );
+    folder.add( vector3, 'x', - 10, 10 ).onChange( onChangeFn );
+    folder.add( vector3, 'y', 0, 10 ).onChange( onChangeFn );
+    folder.add( vector3, 'z', - 10, 10 ).onChange( onChangeFn );
+}
+
+class MinMaxGUIHelper {
+
+    constructor( obj, minProp, maxProp, minDif ) {
+
+        this.obj = obj;
+        this.minProp = minProp;
+        this.maxProp = maxProp;
+        this.minDif = minDif;
+
+    }
+    get min() {
+
+        return this.obj[ this.minProp ];
+
+    }
+    set min( v ) {
+
+        this.obj[ this.minProp ] = v;
+        this.obj[ this.maxProp ] = Math.max( this.obj[ this.maxProp ], v + this.minDif );
+
+    }
+    get max() {
+
+        return this.obj[ this.maxProp ];
+
+    }
+    set max( v ) {
+
+        this.obj[ this.maxProp ] = v;
+        this.min = this.min; // this will call the min setter
+
+    }
+}
+
+const gui = new GUI();
+gui.addColor( new ColorGUIHelper( light, 'color' ), 'value' ).name( 'color' );
+gui.add( light, 'intensity', 0, 200 );
+gui.add( light, 'distance', 0, 40 ).onChange( updateCamera );
+
+{
+    const folder = gui.addFolder( 'Shadow Camera' );
+    folder.open();
+    const minMaxGUIHelper = new MinMaxGUIHelper( light.shadow.camera, 'near', 'far', 0.1 );
+    folder.add( minMaxGUIHelper, 'min', 0.1, 50, 0.1 ).name( 'near' ).onChange( updateCamera );
+    folder.add( minMaxGUIHelper, 'max', 0.1, 50, 0.1 ).name( 'far' ).onChange( updateCamera );
+}
+
+makeXYZGUI( gui, light.position, 'position', updateCamera );
+const video = document.createElement('video');
+video.src = 'bro.webm';
+video.load();
+video.play();
+video.loop = true;
+video.muted = true;
+video.playsInline = true; 
+video.crossOrigin = 'anonymous'; 
+
+const video1 = document.createElement('video');
+video1.src = 'raw.mp4';  // Provide the path to your video file
+video1.play();
+video1.muted = true; // Required for autoplay
+video1.loop = true;
+video1.playsInline = true;
+
+const videoTexture = new THREE.VideoTexture(video);
+videoTexture.minFilter = THREE.LinearFilter;
+videoTexture.magFilter = THREE.LinearFilter;
+videoTexture.format = THREE.RGBAFormat;
+videoTexture.needsUpdate = true;
+
+const materialAnim = new THREE.MeshBasicMaterial({
+    map: videoTexture
+});
+
+const customMaterial = new THREE.MeshBasicMaterial({
+    map: videoTexture,
+    side: THREE.DoubleSide,
+    transparent: true,
+    depthWrite: false, // Optional: may help with transparency issues
+});
+
+
+const videoTexture2 = new THREE.VideoTexture(video);
+videoTexture2.minFilter = THREE.LinearFilter;
+videoTexture2.magFilter = THREE.LinearFilter;
+videoTexture2.format = THREE.RGBFormat;
+videoTexture2.flipY = true;
+
+playButton.addEventListener('click', function() {
+  video.play().then(() => {
+    console.log("Video is playing.");
+    playButton.style.display = 'none';
+  }).catch(error => {
+    console.error('Error trying to play the video:', error);
+  });
+});
+
+const videoTexture1 = new THREE.VideoTexture(video1);
+const planeMaterial = new THREE.MeshBasicMaterial({ 
+  map: videoTexture1,
+  side: THREE.DoubleSide 
+});
+
+// Create a PMREM generator (for creating mipmapped radiance environment maps)
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+pmremGenerator.compileEquirectangularShader();
+
+// Load the EXR texture
+new EXRLoader()
+.setDataType(THREE.FloatType)
+.load('chapel_day_1k.exr', function (texture) {
+const exrCubeRenderTarget = pmremGenerator.fromEquirectangular(texture);
+scene.environment = exrCubeRenderTarget.texture;
+
+texture.dispose();  // Clean up to avoid memory issues
+pmremGenerator.dispose();
+});
+/*
+    // Add the model to the group
+    modelGroup.add(model);
+
+    // Compute the bounding box of the model group
+    const bbox = new THREE.Box3().setFromObject(modelGroup);
+
+    // Calculate the size and center of the bounding box
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+
+    const center = new THREE.Vector3();
+    bbox.getCenter(center);
+
+    // Create a box geometry matching the bounding box dimensions
+    const boxGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+
+    // Create an invisible material
+    const invisibleMaterial = new THREE.MeshBasicMaterial({ visible: false });
+
+    // Create the bounding box mesh
+    bboxMesh = new THREE.Mesh(boxGeometry, invisibleMaterial);
+
+    // Position the bounding box mesh at the center
+    bboxMesh.position.copy(center);
+
+    // Add the bounding box mesh to the group
+    modelGroup.add(bboxMesh);
+
+    // Adjust the model's position relative to the group
+    model.position.sub(center);
+
+    // Add the bounding box mesh to the selectable objects
+    selectableObjects.push(bboxMesh);
+
+    // Create a bounding box helper for visualization
+    bboxHelper = new THREE.BoxHelper(modelGroup, 0xffff00);
+    scene.add(bboxHelper);
+*/
+let modelGroup = new THREE.Group();
+scene.add(modelGroup); // Add the group to the scene
+
+let names = [];
+var mesher = null;
+loader.load('LittlestTokyo1.glb', function ( gltf ) {
     const model = gltf.scene;
+    let shadowCatcher = null;
+    model.traverse(function (node) {
+        names = names.concat(node.name);
+        const prefix = "Plane00";
+        if(node.name.substring(0, prefix.length) === prefix) {
+            console.log(node.name);
+            if (node.isMesh) {
+                // Apply the video texture material to the specific mesh
+                node.material = customMaterial;
+                node.castShadow = false;
+                node.receiveShadow = false;
+                node.transparent = true;
+            }
+        }
+
+        if (node.name == "ShadowCatcher") {
+            shadowCatcher = node;
+            shadowCatcher.material = customMaterial;
+            mesher = shadowCatcher;
+        } else {
+            node.castShadow = true;
+            node.receiveShadow = true;
+        }
+    });
+
+    var j = 0;
+    for(j = 0; j < names.length; j++) {
+        if(names[j].substring(0,7) === "Plane00") {
+          console.log("HELLO", names[j]);
+        }
+    }    
+    const normal = new THREE.Vector3();
+    mesher.getWorldDirection(normal);
+    const cubeMat = new THREE.MeshPhongMaterial({ 
+        color: 0xFFFFFF,
+        side: THREE.DoubleSide,
+    });
+
+    shadowCatcher.receiveShadow = true;
+    shadowCatcher.castShadow = true;
+    shadowCatcher.material = cubeMat;
+    console.log(names);
+    model.position.set( 0, 0, 0 );
     scene.add( model );
-    let fov = 34;
 
-    mixer = new THREE.AnimationMixer(model);
+    mixer = new THREE.AnimationMixer( model );
+
     let i = 0;
-    for (i = 0; i < gltf.animations.length; i++) {
-        mixer.clipAction(gltf.animations[i]).play();
+    for(i = 0; i < gltf.animations.length; i++) {
+        mixer.clipAction( gltf.animations[ i ] ).play();
     }
-    camera = new THREE.PerspectiveCamera(
-        fov, // FOV in degrees
-        1920/1080,
-        1,
-        100000
-    );
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5); // Soft white light
-    scene.add(ambientLight);
-
-    const pointLight = new THREE.PointLight(0xffffff, 1.5, 100);
-    pointLight.position.set(10, 20, 10);
-    pointLight.castShadow = true;
-    scene.add(pointLight);
-
-
-    // Create a texture loader to load the image
-    const textureLoader = new THREE.TextureLoader();
-    const planeTexture = textureLoader.load('hero.png', (texture) => {
-        // Flip the texture horizontally
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.repeat.x = -1; // Flip horizontally
-        texture.needsUpdate = true; // Ensure the texture updates
-    });
-    const material = new THREE.MeshBasicMaterial({
-        map: planeTexture
+    const cameras = [];
+    gltf.scene.traverse(function (child) {
+      if (child.isCamera) {
+        cameras.push(child);
+      }
     });
 
+    if (cameras.length > 0) {
+      const importedCamera = cameras[0];
+      camera.position.copy(importedCamera.position);
+      camera.rotation.copy(importedCamera.rotation);
+    }
 
-    let isBackground;
-    let planeCenter;
-    let cameraPos;
-    let boundingBox = new THREE.Box3();
+    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+    plane.position.copy(mesher.position);
+    const upVector = new THREE.Vector3(0, -1, 0); // Default normal of a plane
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(upVector, normal);
+    plane.quaternion.premultiply(quaternion);
+    scene.add(plane);
+
     {
-        model.traverse((child) => {
-            if (child.isMesh) {
-                boundingBox.expandByObject(child);
-            }
-
-            if(child.name.startsWith("CameraPlane")) {
-                cameraPos = computeMeshCenter(child);
-            } else if (child.name.startsWith("BG")) {
-                planeCenter = getCenterPoint(child);
-                child.material = material;
-                isBackground = true;
-            } else if (child.isMesh) {
-                isBackground = false
-                if (child.material.userData.video_texture_paths) {
-                    const videoMaterial = applyVideoTexture(child.material, isBackground);
-                    child.material = videoMaterial;
-                    videoMaterial.needsUpdate = true;
-                    child.transparent = true;
-                    child.material.opacity = 1.0;
-                } 
-            }
-        });
+        modelGroup.add(model);
+        const bbox = new THREE.Box3().setFromObject(modelGroup);
+        const size = new THREE.Vector3();
+        bbox.getSize(size);
+        const center = new THREE.Vector3();
+        bbox.getCenter(center);
+        const boxGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+        const invisibleMaterial = new THREE.MeshBasicMaterial({ visible: false });
+        const bboxMesh = new THREE.Mesh(boxGeometry, invisibleMaterial);
+        bboxMesh.position.copy(center);
+        modelGroup.add(bboxMesh);
+        modelGroup.position.sub(center);
+        selectableObjects.push(bboxMesh);
+        bboxHelper = new THREE.BoxHelper(modelGroup, 0xffff00);
+        scene.add(bboxHelper);
     }
-    const helper = new THREE.Box3Helper( boundingBox, 0xffff00 );
-    scene.add( helper );
-    createCameraFromBoundingBox(planeCenter, boundingBox, fov);
-
-    const cameraHelper = new THREE.CameraHelper(camera);
-    scene.add(cameraHelper);
-    renderer.setAnimationLoop(animate);
-}, function (gltf) {
+    
+    renderer.setAnimationLoop( animate );
+}, function(gltf) {
+    console.log("PROGRESS", gltf);
 },
 function (e) {
     console.log("ERRORED");
-    console.error(e);
+    console.error( e );
 });
 
-// Function to stop the video
-function startVideo() {
-    if (videoGlobal) {
-        videoGlobal.play();
-        videoGlobal.currentTime = 0; // Reset video to the start
-        console.log("Video stopped and reset to the beginning.");
+
+// Handle Start and Stop button events
+document.getElementById('startButton').addEventListener('click', () => {
+    if (!isAnimating) {
+        isAnimating = true;
+    }
+});
+
+document.getElementById('stopButton').addEventListener('click', () => {
+    isAnimating = false; // Stop the animation loop
+});
+
+video.addEventListener('play', function() {
+  console.log('Video is now playing on the plane.');
+});
+
+function onKeyDown(event) {
+    if (event.key === 'r' || event.key === 'R') {
+        // Flip the modelGroup by 90 degrees around the Y-axis
+        modelGroup.rotation.x += Math.PI / 2;
+        // Optionally, normalize the rotation to keep it within 0 to 2π
+        modelGroup.rotation.x %= (2 * Math.PI);
+
+        // Update the bounding box helper
+        if (bboxHelper) {
+            bboxHelper.update();
+        }
     }
 }
-
-// Function to stop the video
-function stopVideo() {
-    if (videoGlobal) {
-        videoGlobal.pause();
-        videoGlobal.currentTime = 0; // Reset video to the start
-        console.log("Video stopped and reset to the beginning.");
-    }
-}
-
-// Add event listener for stop button
-const stopButton = document.getElementById('stopButton'); // Assuming the stop button has an ID of 'stopButton'
-stopButton.addEventListener('click', stopVideo);
-const startButton = document.getElementById('startButton'); // Assuming the stop button has an ID of 'stopButton'
-startButton.addEventListener('click', startVideo);
